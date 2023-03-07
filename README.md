@@ -1,2 +1,2 @@
 # switchblade
-useful deep learning stuff :)
+A useful deep learning utilities library :)
