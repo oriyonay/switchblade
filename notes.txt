@@ -1,0 +1,8 @@
+Some notes for myself when developing this :)
+
+-------------------- BUILD NOTES --------------------
+to build a new version: python3 -m build
+to upload to pypi test: 
+    python3 -m twine upload --repository testpypi dist/*
+to upload to real pypi:
+    python3 -m twine upload dist/*
