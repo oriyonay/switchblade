@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "switchblade"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   { name="Ori Yonay", email="oriyonay12@gmail.com" },
 ]

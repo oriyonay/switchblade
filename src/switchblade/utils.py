@@ -33,8 +33,17 @@ def download_file(url, local_filename=None, chunk_size=32768):
 
 def infinite_dataloader(dataloader):
     '''
-    neat function for getting the next batch without epochs
+    Makes any PyTorch dataloader 'infinite':
+    simply use x = next(dataloader) to get the next batch!
     '''
     while True:
         for data in dataloader:
             yield data
+
+def freeze(module):
+    '''
+    Freezes all module parameters
+    '''
+    module.eval()
+    for p in module.parameters():
+        p.requires_grad = False
