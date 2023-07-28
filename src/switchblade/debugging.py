@@ -6,6 +6,9 @@ def console():
     '''
     a console you can just plug in, instead of 
     many print() lines :)
+
+    Doesn't work very well with scoping but this can 
+    help in basic bug cases.
     '''
     while True:
         cmd = input('>> ')
