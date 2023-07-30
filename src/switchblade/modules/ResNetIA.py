@@ -29,7 +29,7 @@ class BasicBlock(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_block, num_classes=10, in_channels=1):
+    def __init__(self, block, num_block, num_classes=10, in_channels=3):
         super(ResNet, self).__init__()
 
         self.conv1 = nn.Sequential(
