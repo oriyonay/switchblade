@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 def download_file(url, local_filename=None, chunk_size=32768):
     '''
-    neat utility to download files using a stream
+    Utility to download files using a stream
     url: the url to download from
     local_filename: the filename (and path) to download file to
     chunk_size: size of data chunk to stream
@@ -48,7 +48,6 @@ def freeze(module):
     '''
     Freezes all module parameters
     '''
-    module.eval()
     for p in module.parameters():
         p.requires_grad = False
 
