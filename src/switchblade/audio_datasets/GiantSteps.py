@@ -2,55 +2,47 @@
 The GTZAN dataset class, which extends the AudioDataset class
 '''
 
-from .Dataset import Dataset
+from dataset import Dataset
 import os
-import torch
-import soundfile as sf
 from typing import Callable, Optional, Union
 import json
 
 class GiantStepsDataset(Dataset):
     subsets = ['train', 'valid', 'test']
+    n_outputs = 24
     
-    '''
-    dataroot: where the data exists; will recursively traverse
-    subset: the subset to load
-    return_labels: should labels be returned?
-    labels: (filename : label) pairs or None if unlabeled
-    n_samples: number of samples to return
-    sr: which sample rate to use? will resample if necessary
-    transform: optional transform to signal
-    preprocess_path: path to store preprocessed data
-    do_preprocessing: should we eagerly preprocess?
-        'auto' = preprocess if necessary
-    '''
     def __init__(
         self, 
         dataroot: str, 
-        subset: str,
-        return_labels: Optional[bool] = False, 
-        labels: Optional[dict] = None,
         n_samples: Optional[int] = 50000, 
         sr: Optional[int] = 44100, 
         transform: Optional[Callable] = None, 
-        preprocess_path: Optional[str] = None,
-        do_preprocessing: Union[str, bool] = 'auto',
+        subset: str = 'train',
+        return_labels: Optional[bool] = False,
         **kwargs
     ):
+        '''
+        dataroot: where the data exists; will recursively traverse
+        subset: the subset to load
+        return_labels: should labels be returned?
+        labels: (filename : label) pairs or None if unlabeled
+        n_samples: number of samples to return
+        sr: which sample rate to use? will resample if necessary
+        transform: optional transform to signal
+        preprocess_path: path to store preprocessed data
+        do_preprocessing: should we eagerly preprocess?
+            'auto' = preprocess if necessary
+        '''
         super().__init__()
+
         assert subset in self.subsets
-        assert do_preprocessing in ['auto', True, False]
 
         self.dataroot = dataroot 
         self.subset = subset
         self.return_labels = return_labels
-        self.labels = labels
         self.n_samples = n_samples
         self.sr = sr
         self.transform = transform
-        self.do_preprocessing = do_preprocessing
-        self.preprocess_path = preprocess_path or os.path.join(dataroot, 'giantsteps','preprocessed')
-        self.preprocessed = os.path.exists(self.preprocess_path)
         self.filenames = []
         
         '''
@@ -59,15 +51,16 @@ class GiantStepsDataset(Dataset):
         C# = Db, D# = Eb, F# = Gb, G# = Ab, A# = Bb
         C sharp = D flat, D sharp = E flat
         '''
-        self.classes = ['C Major','C Minor','Db Major','Db Minor','D Major',
-                        'D Minor','Eb Major','Eb Minor','E Major','E Minor',
-                        'F Major','F Minor','Gb Major','Gb Minor','G Major',
-                        'G Minor','Ab Major','Ab Minor','A Major','A Minor',
-                        'Bb Major','Bb Minor','B Major','B Minor',
-                        ]    
+        self.classes = [
+            'C Major','C Minor','Db Major','Db Minor','D Major',
+            'D Minor','Eb Major','Eb Minor','E Major','E Minor',
+            'F Major','F Minor','Gb Major','Gb Minor','G Major',
+            'G Minor','Ab Major','Ab Minor','A Major','A Minor',
+            'Bb Major','Bb Minor','B Major','B Minor'
+        ]
 
-        SPLIT_PATH = os.path.join(dataroot,'giantsteps','giantsteps_clips.json')
-        MUSIC_PATH = os.path.join(dataroot,'giantsteps','audio')
+        SPLIT_PATH = os.path.join(dataroot, 'giantsteps', 'giantsteps_clips.json')
+        MUSIC_PATH = os.path.join(dataroot, 'giantsteps', 'audio')
         
         with open(SPLIT_PATH, 'r') as file :
             data = json.load(file)
@@ -78,9 +71,9 @@ class GiantStepsDataset(Dataset):
         Giantsteps split file has an odd structure so 
         test must be read differently than valid and train
         
-        test = 604 songs -> cut into 4 parts 2416
-        train = 923 songs -> cut into 4 parts 3692
-        valid = 236 songs -> cut into 4 parts 944
+        test = 604 songs
+        train = 923 songs
+        valid = 236 songs
         
         Dataset has more songs than are actually used in the subsets
         '''
@@ -106,30 +99,16 @@ class GiantStepsDataset(Dataset):
                     i+=1
 
         self.labels[i] = Note # error handling
-        
-        preprocess_needed = (
-            (self.do_preprocessing == True) or 
-            (self.do_preprocessing == 'auto' and not self.preprocessed)
-        )
-        if preprocess_needed:
-            self.preprocess_all()
 
-        self.n_outputs = None
-        if self.labels:
-            self.n_outputs = len(set(labels.values()))
-            
+        for arg in kwargs.keys():
+            if arg in self.VALID_KWARGS:
+                self.__setattr__(arg, kwargs[arg])
+            else:
+                print(f'WARNING: {__class__.__name__} does not support "{arg}" argument.')
+
     def get_signal(self, i):
         filename = self.filenames[i]
-        _, filetype = os.path.splitext(filename)
-        if filetype == '.mp3':
-            signal, sr = sf.read(filename)
-            signal = torch.tensor(signal, dtype=torch.float32) # (n_samples, n_channels)
-            signal = signal.T # (n_channels, n_samples)
-            
-        signal = self.make_mono_if_necessary(signal)
-        signal = self.resample_if_necessary(signal, sr)
-        
-        return signal
+        return self.load_signal(filename)
         
     def get_label(self, i):
         return self.labels[i]

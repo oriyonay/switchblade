@@ -5,18 +5,15 @@ https://github.com/Spijkervet/CLMR/blob/master/clmr/datasets/magnatagatune.py
 
 import os
 import numpy as np
-from typing import Callable, Optional, Union
-import random
+from typing import Callable, Optional
 import torch
-import soundfile as sf
 
-# torchaudio.set_audio_backend('soundfile')
 from torchvision.datasets.utils import (
     download_url,
     extract_archive,
 )
 
-from .Dataset import Dataset
+from dataset import Dataset
 
 
 FOLDER_IN_ARCHIVE = "magnatagatune"
@@ -73,7 +70,7 @@ def get_file_list(root, subset, split):
     return fl, binary
 
 
-class MagnaTagATune(Dataset):
+class MagnaTagATuneDataset(Dataset):
     """Create a Dataset for MagnaTagATune.
     Args:
         root (str): Path to the directory where the dataset is found or downloaded.
@@ -87,27 +84,25 @@ class MagnaTagATune(Dataset):
 
     _ext_audio = ".wav"
     subsets = ["train", "valid", "test"]
+    n_outputs = 50  # self.binary.shape[1]
 
     def __init__(
         self,
-        root: str,
-        folder_in_archive: Optional[str] = FOLDER_IN_ARCHIVE,
-        download: Optional[bool] = False,
-        subset: Optional[str] = None,
-        split: Optional[str] = 'pons2017',
-        return_labels: Optional[bool] = True,
+        dataroot: str,
         n_samples: Optional[int] = 50000, 
         sr: Optional[int] = 44100, 
-        transform: Optional[Callable] = None, 
-        preprocess_path: Optional[str] = None,
-        do_preprocessing: Union[str, bool] = 'auto',
-        cap_at: Optional[int] = None,
+        transform: Optional[Callable] = None,
+        subset: Optional[str] = None,
+        download: Optional[bool] = False,
+        return_labels: Optional[bool] = True,
+        split: Optional[str] = 'pons2017',
         **kwargs
     ) -> None:
 
         super().__init__()
-        self.root = root
-        self.folder_in_archive = folder_in_archive
+        
+        self.root = dataroot
+        self.folder_in_archive = 'magnatagatune'
         self.download = download
         self.subset = subset
         self.split = split
@@ -115,18 +110,13 @@ class MagnaTagATune(Dataset):
         self.n_samples = n_samples
         self.sr = sr
         self.transform = transform
-        self.preprocess_path = preprocess_path or os.path.join(self.root, 'magnatagatune', 'preprocessed')
-        self.do_preprocessing = do_preprocessing
-        self.cap_at = cap_at
-        self.preprocessed = os.path.exists(self.preprocess_path)
 
-        assert do_preprocessing in ['auto', True, False]
         assert subset is None or subset in self.subsets, (
             "When `subset` not None, it must take a value from "
             + "{'train', 'valid', 'test'}."
         )
 
-        self._path = os.path.join(root, folder_in_archive)
+        self._path = os.path.join(dataroot, self.folder_in_archive)
 
         if download:
             if not os.path.isdir(self._path):
@@ -169,19 +159,12 @@ class MagnaTagATune(Dataset):
             )
 
         self.fl, self.binary = get_file_list(self._path, self.subset, self.split)
-        self.n_outputs = 50  # self.binary.shape[1]
 
-        # if we only want self.cap_at samples, get them randomly:
-        if self.cap_at:
-            random.shuffle(self.fl)
-
-        # preprocess if necessary:
-        preprocess_needed = (
-            (self.do_preprocessing == True) or 
-            (self.do_preprocessing == 'auto' and not self.preprocessed)
-        )
-        if preprocess_needed:
-            self.preprocess_all()
+        for arg in kwargs.keys():
+            if arg in self.VALID_KWARGS:
+                self.__setattr__(arg, kwargs[arg])
+            else:
+                print(f'WARNING: {__class__.__name__} does not support "{arg}" argument.')
 
     def file_path(self, n: int) -> str:
         _, fp = self.fl[n].split("\t")
@@ -189,17 +172,7 @@ class MagnaTagATune(Dataset):
     
     def get_signal(self, i):
         target_fp = self.target_file_path(i)
-        # try:
-        # signal, sr = torchaudio.load(target_fp)
-        signal, sr = sf.read(target_fp)
-        signal = torch.tensor(signal, dtype=torch.float32).T # (n_channels, n_samples)
-        # except OSError as e:
-        #     raise OSError('File not found')
-        
-        signal = self.make_mono_if_necessary(signal)
-        signal = self.resample_if_necessary(signal, sr)
-
-        return signal
+        return self.load_signal(target_fp)
 
     def get_label(self, i):
         clip_id, _ = self.fl[i].split("\t")
@@ -207,7 +180,7 @@ class MagnaTagATune(Dataset):
         return torch.FloatTensor(label)
 
     def __len__(self) -> int:
-        return len(self.fl) if self.cap_at is None else self.cap_at
+        return len(self.fl)
 
     def target_file_path(self, n: int) -> str:
         fp = self.file_path(n)

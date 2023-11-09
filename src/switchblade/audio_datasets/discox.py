@@ -3,43 +3,36 @@ The DISCO Dataset: the largest available music dataset to date.
 '''
 
 from concurrent.futures import ThreadPoolExecutor
-from .Dataset import Dataset
+from dataset import Dataset
 from datasets import load_dataset
 import hashlib
 import os
 import random
 import re
 import soundfile as sf
-import torchaudio
 from tqdm import tqdm
 from urllib.request import urlretrieve
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
-from .AudioDataset import AudioDataset
 
 class DISCOXDataset(Dataset):
     def __init__(
             self, 
             dataroot: str,
-            subset: str = '10k-random', 
-            max_workers: int = 20, 
-            dir_depth: int = 3,
-
-            download: bool = False,
             n_samples: Optional[int] = 50000, 
             sr: Optional[int] = 44100, 
             transform: Optional[Callable] = None, 
-            preprocess_path: Optional[str] = None,
-            do_preprocessing: Union[str, bool] = False,
-            return_labels: Optional[bool] = False, 
-            cap_at: Union[int, None] = None,
-            chunk_dataset: bool = False,
 
-            additional_audio_folder: Optional[str] = None
+            subset: str = '10k-random', 
+            download: bool = False,
+
+            chunk_dataset: bool = False,
+            max_workers: int = 20, 
+            dir_depth: int = 2,
+            **kwargs
     ):
         super().__init__()
 
-        self.n_views = 2
         self.return_same_slice = False
         self.return_same_slice_p = None
         self.subsets = ['10k-random', '200k-random', '200k-high-quality', '10m']
@@ -56,30 +49,10 @@ class DISCOXDataset(Dataset):
         self.n_outputs = None
 
         self.download_dataset = download
-        self.return_labels = return_labels
-        self.do_preprocessing = do_preprocessing
         self.n_samples = n_samples
         self.sr = sr
         self.transform = transform
-        self.cap_at = cap_at
         self.chunk_dataset = chunk_dataset
-        self.preprocess_path = preprocess_path or os.path.join(self.dataroot, 'preprocessed')
-        self.preprocessed = os.path.exists(self.preprocess_path)
-
-        self.additional_audio_folder = additional_audio_folder
-        if additional_audio_folder:
-            self.additional_audio_folder = AudioDataset(
-                additional_audio_folder,
-                self.return_labels,
-                n_samples=self.n_samples,
-                sr=self.sr,
-                transform=self.transform
-            )
-            print(f'Processed additional AudioFolder of size {len(self.additional_audio_folder)}')
-
-        # for grace:
-        # if os.name != 'nt':
-        #     torchaudio.set_audio_backend('sox_io')
 
         # Load the dataset
         self.ds = load_dataset(self.dataset_name)
@@ -102,13 +75,11 @@ class DISCOXDataset(Dataset):
             except:
                 print('Splitting was unsuccessful (probably a problem with the SoundFile library)')
 
-        # Preprocess if needed or requested
-        preprocess_needed = (
-            (self.do_preprocessing == True) or 
-            (self.do_preprocessing == 'auto' and not self.preprocessed)
-        )
-        if preprocess_needed:
-            self.preprocess_all()
+        for arg in kwargs.keys():
+            if arg in self.VALID_KWARGS:
+                self.__setattr__(arg, kwargs[arg])
+            else:
+                print(f'WARNING: {__class__.__name__} does not support "{arg}" argument.')
 
     def _ensure_data_downloaded(self):
         os.makedirs(self.dataroot, exist_ok=True)
@@ -161,7 +132,6 @@ class DISCOXDataset(Dataset):
 
             sf.write(split_path, split_signal, sr)
 
-
     def _split_data(self):
         '''
         Splits each 30-second audio file into overlapping 2-second windows.
@@ -172,15 +142,6 @@ class DISCOXDataset(Dataset):
             list(tqdm(executor.map(self._split_file, self.urls), total=len(self.urls)))
 
     def get_signal(self, i: int):
-        # if we have an additional audio folder:
-        if self.additional_audio_folder and i >= len(self.urls):
-            i -= len(self.urls)
-            return self.additional_audio_folder.get_signal(i)
-
-        # sanity check, to avoid potential errors :)
-        if self.cap_at:
-            i = i % self.cap_at
-
         filename = self.url2filename(self.urls[i])
         hash_name = hashlib.md5(filename.encode()).hexdigest()
         sub_dirs = [self.dataroot] + [hash_name[i:i+2] for i in range(0, 2*self.dir_depth, 2)]
@@ -191,15 +152,7 @@ class DISCOXDataset(Dataset):
             filename = random.choice(all_files)
         
         filename = os.path.join(*sub_dirs, filename)
-        signal, sr = torchaudio.load(filename)
-        signal = self.make_mono_if_necessary(signal)
-        signal = self.resample_if_necessary(signal, sr)
-
-        # another sanity check / bug avoidance: 
-        # some files are empty when loaded (torch.Size([0])). we'll simply return the next 
-        # data sample instead; doesn't matter too much with a lot of data.
-        if signal.numel() == 0:
-            return self.get_signal((i+1) % len(self))
+        signal = self.load_signal(filename)
 
         return signal
 
@@ -208,10 +161,7 @@ class DISCOXDataset(Dataset):
         return None
 
     def __len__(self):
-        # return len(self.urls) if self.cap_at is None else self.cap_at
-        self_length = len(self.urls) if self.cap_at is None else self.cap_at
-        additional_length = len(self.additional_audio_folder) if self.additional_audio_folder else 0
-        return self_length + additional_length
+        return len(self.urls)
     
     @staticmethod
     def url2filename(url):

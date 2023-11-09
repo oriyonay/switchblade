@@ -1,12 +1,10 @@
 import os
 from pathlib import Path
 import random
-import soundfile as sf
-import torch
-import torchaudio
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
-from .Dataset import Dataset
+import constants
+from dataset import Dataset
 
 class AudioDataset(Dataset):
     '''
@@ -29,54 +27,33 @@ class AudioDataset(Dataset):
     def __init__(
         self, 
         dataroot: str, 
-        return_labels: Optional[bool] = False, 
-        labels: Optional[dict] = None,
         n_samples: Optional[int] = 50000, 
         sr: Optional[int] = 44100, 
-        transform: Optional[Callable] = None, 
-        preprocess_path: Optional[str] = None,
-        do_preprocessing: Union[str, bool] = False,
-        cap_at: Union[None, int] = None,
+        transform: Optional[Callable] = None,
         **kwargs
     ):
         super().__init__()
-        assert do_preprocessing in ['auto', True, False]
-        self.subsets = ['all'] # ignore 'subset' arg if passed
+        self.subsets = ['all']
 
         self.dataroot = dataroot
-        self.return_labels = return_labels
-        self.labels = labels
         self.n_samples = n_samples
         self.sr = sr
         self.transform = transform
-        self.do_preprocessing = do_preprocessing
-        self.preprocess_path = preprocess_path or os.path.join(dataroot, 'preprocessed')
-        self.preprocessed = os.path.exists(self.preprocess_path)
-        self.cap_at = cap_at
 
         # collect a list of all filenames:
         self.filenames = []
-        extensions = ['mp3', 'wav']
-        for extension in extensions:
+        for extension in constants.SUPPORTED_FILETYPES:
             for filename in Path(dataroot).rglob(f'*.{extension}'):
                 self.filenames.append(str(filename))
         random.shuffle(self.filenames)
 
-        if self.labels:
-            assert len(self.labels) == len(self.filenames)
-            for filename in self.filenames:
-                assert filename in self.labels
-
-        preprocess_needed = (
-            (self.do_preprocessing == True) or 
-            (self.do_preprocessing == 'auto' and not self.preprocessed)
-        )
-        if preprocess_needed:
-            self.preprocess_all()
-
         self.n_outputs = None
-        if labels:
-            self.n_outputs = len(set(labels.values()))
+
+        for arg in kwargs.keys():
+            if arg in self.VALID_KWARGS:
+                self.__setattr__(arg, kwargs[arg])
+            else:
+                print(f'WARNING: {__class__.__name__} does not support "{arg}" argument.')
 
     def get_signal(self, i):
         try:
@@ -86,9 +63,7 @@ class AudioDataset(Dataset):
             return self.get_signal((i+1) % len(self))
 
     def get_label(self, i):
-        if self.labels is None:
-            return None
-        return self.labels[self.filenames[i]]
+        return None
 
     def __len__(self):
-        return len(self.filenames) if self.cap_at is None else self.cap_at
+        return len(self.filenames)
