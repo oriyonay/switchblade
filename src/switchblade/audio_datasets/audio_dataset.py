@@ -1,10 +1,9 @@
-import os
 from pathlib import Path
 import random
 from typing import Callable, Optional
 
-import constants
-from dataset import Dataset
+from . import constants
+from .dataset import Dataset
 
 class AudioDataset(Dataset):
     '''

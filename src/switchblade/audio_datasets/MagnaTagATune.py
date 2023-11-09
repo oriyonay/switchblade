@@ -13,7 +13,7 @@ from torchvision.datasets.utils import (
     extract_archive,
 )
 
-from dataset import Dataset
+from .dataset import Dataset
 
 
 FOLDER_IN_ARCHIVE = "magnatagatune"

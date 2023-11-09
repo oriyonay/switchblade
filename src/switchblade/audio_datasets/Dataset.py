@@ -9,10 +9,6 @@ import torchaudio
 from torchaudio import transforms
 from torch.utils.data import Dataset as TorchDataset
 
-# Set audio backend
-# if os.name != 'nt':
-#     torchaudio.set_audio_backend('soundfile')
-
 class Dataset(TorchDataset):
     '''
     The abstract dataset class definition.

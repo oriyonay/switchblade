@@ -1,8 +1,8 @@
 from dataset import Dataset
+import json
 import os
 import torch
 from typing import Callable, Optional
-import json
 
 class EmoMusicDataset(Dataset):
     

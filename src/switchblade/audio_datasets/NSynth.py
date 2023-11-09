@@ -4,8 +4,8 @@ from pathlib import Path
 import tarfile
 from typing import Callable, Optional
 
-from dataset import Dataset
-from utils import download_file
+from .dataset import Dataset
+from .utils import download_file
 
 URLS = {
     'train' : 'http://download.magenta.tensorflow.org/datasets/nsynth/nsynth-train.jsonwav.tar.gz',

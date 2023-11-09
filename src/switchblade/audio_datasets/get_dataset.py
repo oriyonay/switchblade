@@ -2,13 +2,13 @@
 Quick and easy way to get any dataset
 '''
 
-from audio_dataset import AudioDataset
-from discox import DISCOXDataset
-from emomusic import EmoMusicDataset
-from giantsteps import GiantStepsDataset
-from gtzan import GTZANDataset
-from magnatagatune import MagnaTagATuneDataset
-from nsynth import NSynthDataset
+from .audio_dataset import AudioDataset
+from .discox import DISCOXDataset
+from .emomusic import EmoMusicDataset
+from .giantsteps import GiantStepsDataset
+from .gtzan import GTZANDataset
+from .magnatagatune import MagnaTagATuneDataset
+from .nsynth import NSynthDataset
 
 def set_default_backend():
     import os

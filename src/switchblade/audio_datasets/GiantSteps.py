@@ -3,9 +3,9 @@ The GTZAN dataset class, which extends the AudioDataset class
 '''
 
 from dataset import Dataset
-import os
-from typing import Callable, Optional, Union
 import json
+import os
+from typing import Callable, Optional
 
 class GiantStepsDataset(Dataset):
     subsets = ['train', 'valid', 'test']
