@@ -2,7 +2,7 @@
 The GTZAN dataset class, which extends the AudioDataset class
 '''
 
-from dataset import Dataset
+from .dataset import Dataset
 import os
 import json
 import torch

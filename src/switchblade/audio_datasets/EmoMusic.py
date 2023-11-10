@@ -1,4 +1,4 @@
-from dataset import Dataset
+from .dataset import Dataset
 import json
 import os
 import torch

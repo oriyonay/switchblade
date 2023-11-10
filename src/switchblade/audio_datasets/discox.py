@@ -3,7 +3,7 @@ The DISCO Dataset: the largest available music dataset to date.
 '''
 
 from concurrent.futures import ThreadPoolExecutor
-from dataset import Dataset
+from .dataset import Dataset
 from datasets import load_dataset
 import hashlib
 import os

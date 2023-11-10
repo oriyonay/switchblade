@@ -2,9 +2,10 @@
 Simple example for how to use this module
 '''
 
-from get_dataset import get_dataset
+from .get_dataset import get_dataset
 
-dataset = get_dataset('discox')(
+dataset = get_dataset(
+    dataset_name='discox',
     dataroot='/Users/oriyonay/Desktop/datasets',
     n_samples=50000,
     sr=16000,

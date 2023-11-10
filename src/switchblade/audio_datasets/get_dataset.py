@@ -16,7 +16,7 @@ def set_default_backend():
     if os.name != 'nt':
         torchaudio.set_audio_backend('soundfile')
 
-def get_dataset(dataset_name: str, set_backend: bool = True):
+def get_dataset(dataset_name: str, set_backend: bool = True, **kwargs):
     if set_backend:
         set_default_backend()
 
@@ -31,6 +31,6 @@ def get_dataset(dataset_name: str, set_backend: bool = True):
     }
 
     if dataset_name.lower() in datasets:
-        return datasets[dataset_name]
+        return datasets[dataset_name](**kwargs)
     
     raise ValueError(f'Error: dataset {dataset_name} not found.')
