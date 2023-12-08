@@ -70,7 +70,8 @@ class GTZANDataset(Dataset):
             return torch.zeros(self.n_samples)
 
     def get_label(self, i):
-        return self.labels[self.filenames[i]]
+        label = self.labels[self.filenames[i]]
+        return self.classes.index(label)
 
     def __len__(self):
         return len(self.filenames)

@@ -29,6 +29,7 @@ class DISCOXDataset(Dataset):
             chunk_dataset: bool = False,
             max_workers: int = 20, 
             dir_depth: int = 2,
+            hf_auth_token: str = None,
             **kwargs
     ):
         super().__init__()
@@ -55,8 +56,12 @@ class DISCOXDataset(Dataset):
         self.chunk_dataset = chunk_dataset
 
         # Load the dataset
-        self.ds = load_dataset(self.dataset_name)
-        self.urls = self.ds['train']['preview_url_spotify']
+        try:
+            self.ds = load_dataset(self.dataset_name, token=hf_auth_token)
+            self.urls = self.ds['train']['preview_url_spotify']
+        except:
+            print('An error occurred while trying to load dataset from HuggingFace.')
+            print('Maybe the dataset was removed? (DISCOX has been having issues)')
 
         # Ensure data is downloaded
         if not os.path.exists(self.dataroot) or self.download_dataset:

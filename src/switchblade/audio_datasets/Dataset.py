@@ -146,10 +146,10 @@ class Dataset(TorchDataset):
             signal = self.slice_signal(signal)
 
         views = []
-        for i in range(self.n_views):
+        for j in range(self.n_views):
             # signal already loaded on first iteration
-            if i != 0 and not self.return_same_slice:
-                signal = self.get_signal(i)
+            if j != 0 and not self.return_same_slice:
+                signal = self.get_signal(j)
 
             view = self.slice_signal(signal).unsqueeze(0)
             if self.transform:

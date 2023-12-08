@@ -51,13 +51,13 @@ class GiantStepsDataset(Dataset):
         C# = Db, D# = Eb, F# = Gb, G# = Ab, A# = Bb
         C sharp = D flat, D sharp = E flat
         '''
-        self.classes = [
+        self.classes = [c.lower() for c in [
             'C Major','C Minor','Db Major','Db Minor','D Major',
             'D Minor','Eb Major','Eb Minor','E Major','E Minor',
             'F Major','F Minor','Gb Major','Gb Minor','G Major',
             'G Minor','Ab Major','Ab Minor','A Major','A Minor',
             'Bb Major','Bb Minor','B Major','B Minor'
-        ]
+        ]]
 
         SPLIT_PATH = os.path.join(dataroot, 'giantsteps', 'giantsteps_clips.json')
         MUSIC_PATH = os.path.join(dataroot, 'giantsteps', 'audio')
@@ -111,7 +111,8 @@ class GiantStepsDataset(Dataset):
         return self.load_signal(filename)
         
     def get_label(self, i):
-        return self.labels[i]
+        label = self.labels[i]
+        return self.classes.index(label.lower())
         
     def __len__(self):
         return len(self.filenames)

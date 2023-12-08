@@ -142,8 +142,18 @@ class Delay(BaseWaveformTransform):
 
 
 class RandAugment:
-    def __init__(self, sr: int, max_transforms: int = 3, magnitude: int = 7, p: float = 0.5):
+    def __init__(
+            self, 
+            sr: int, 
+            max_transforms: int = 4, 
+            magnitude: int = 7, 
+            p: float = 0.5,
+            return_params: bool = False,
+            mutual_exclusions: bool = True
+    ):
+        self.return_params = return_params
         self.sr = sr
+        self.p = p
         self.max_transforms = max_transforms
         self.magnitude = magnitude
         self.transforms = [
@@ -151,29 +161,138 @@ class RandAugment:
             lambda mag: TimeInversion(mode='per_example', p=p),
             lambda mag: AddColoredNoise(mode='per_example', p=p, min_snr_in_db=5-mag, max_snr_in_db=50-mag),
             lambda mag: Gain(min_gain_in_db=-6.0-mag, max_gain_in_db=0.0, mode='per_example', p=p),
-            lambda mag: random.choice([
-                HighPassFilter(min_cutoff_freq=20+mag*200, max_cutoff_freq=2400+mag*200, mode='per_example', p=p),
-                LowPassFilter(min_cutoff_freq=3500-mag*300, max_cutoff_freq=7500-mag*300, mode='per_example', p=p)
-            ]),
+            lambda mag: HighPassFilter(min_cutoff_freq=20+mag*200, max_cutoff_freq=2400+mag*200, mode='per_example', p=p),
+            lambda mag: LowPassFilter(min_cutoff_freq=3500-mag*300, max_cutoff_freq=7500-mag*300, mode='per_example', p=p),
             lambda mag: Delay(0.03, 0.06+mag*0.01, p=p),
             lambda mag: PitchShift(-mag, mag, mode='per_example', sample_rate=self.sr, p=p),
-            lambda mag: random.choice([
-                Shift(-.2-mag*0.02, .2+mag*0.02, mode='per_example', p=p),
-                SpliceOut(num_time_intervals=4, max_width=100+mag*10, mode='per_example', p=p)
-            ])
+            lambda mag: Shift(-.2-mag*0.02, .2+mag*0.02, mode='per_example', p=p),
+            # lambda mag: SpliceOut(num_time_intervals=4, max_width=100+mag*10, mode='per_example', p=p),
         ]
 
+        # indices of augmentations where only one at most should get applied
+        self.mutual_exclusions = [
+            (4, 5),
+            # (8, 9)
+        ] if mutual_exclusions else []
+
+        self.transform_to_n_params = {
+            PolarityInversion : 0,
+            TimeInversion : 0,
+            AddColoredNoise : 1,
+            Gain : 1,
+            HighPassFilter : 1,
+            LowPassFilter : 1,
+            Delay : 1,
+            PitchShift : 1,
+            Shift : 1,
+            # SpliceOut : 1
+        }
+
     def __call__(self, x):
+        # log original shape, potentially unsqueeze to (B, C, n_samples) 
+        # and then reshape to original shape at the end
         original_shape = x.shape
         x = self._ensure_shape(x)
-        num_transforms = random.randint(1, self.max_transforms)
-        chosen_transforms = random.sample(self.transforms, num_transforms)
+        batch_size = x.shape[0]
 
-        for transform_func in chosen_transforms:
-            transform = transform_func(self.magnitude)
+        # Sample a subset of indices from the range of transforms and sort them
+        sampled_indices = self._sample_augmentations()
+
+        # Select the transforms based on the sampled and sorted indices
+        chosen_transforms = [self.transforms[i] for i in sampled_indices]
+
+        # apply transforms
+        applied_transforms = {} # (str : actual class) pairs
+        for f in chosen_transforms:
+            transform = f(self.magnitude)
             x = transform(x, sample_rate=self.sr)
+            applied_transforms[self._get_str(transform)] = transform
 
-        return x.view(*original_shape)
+        transformed = x.view(*original_shape)
+
+        if not self.return_params:
+            return transformed
+        
+        # collect transform parameters
+        transform_params = []
+        for f in self.transforms:
+            # boolean values: was this transform applied?
+            f = f(self.magnitude)
+            transform_str = self._get_str(f)
+            indices = torch.zeros(batch_size)
+            if transform_str in applied_transforms:
+                transform = applied_transforms[transform_str]
+                indices = transform.transform_parameters['should_apply']
+                
+            transform_params.append(indices.unsqueeze(0))
+
+            # actual settings, for some transforms. start by assuming
+            # transform was not one that was applied
+            n_params = self.transform_to_n_params[type(f)]
+            params = torch.zeros(n_params, batch_size)
+
+            # if we performed this augmentation, get the actual parameters
+            if transform_str in applied_transforms:
+                try:
+                    # then the previous exact same if statement already initialized transform
+                    indices = transform.transform_parameters['should_apply'].unsqueeze(0)
+                    values = self._get_values_from_transform(transform)
+
+                    if n_params != 0:
+                        params[indices] = values
+                except:
+                    pass
+                    
+            transform_params.append(params)
+
+        transform_params = torch.cat(transform_params, dim=0).mT
+
+        return transformed, torch.FloatTensor(transform_params)
+    
+    def _get_str(self, transform):
+        return str(type(transform))
+    
+    def _sample_augmentations(self):
+        all_indices = set(range(len(self.transforms)))
+        sampled_indices = set()
+
+        # Handle mutually exclusive augmentations
+        for group in self.mutual_exclusions:
+            if random.random() < self.p:  # Decide whether to apply an augmentation from this group
+                sampled_indices.add(random.choice(group))
+                all_indices -= set(group)  # Remove all indices from this group
+
+        # Sample remaining augmentations from non-exclusive ones
+        num_transforms = random.randint(1, self.max_transforms - len(sampled_indices))
+        sampled_indices.update(random.sample(all_indices, min(num_transforms, len(all_indices))))
+
+        return sorted(sampled_indices)
+    
+    def _get_values_from_transform(self, transform):
+        # NOTE: all the unsqueezing is to be future-proof, in case we introduce
+        # a new transform that we want to store multiple parameters for.
+        if isinstance(transform, AddColoredNoise):
+            values = transform.transform_parameters['snr_in_db'].unsqueeze(0)
+        elif isinstance(transform, Gain):
+            values = transform.transform_parameters['gain_factors'].squeeze().unsqueeze(0)
+        elif isinstance(transform, HighPassFilter):
+            values = transform.transform_parameters['cutoff_freq'].unsqueeze(0)
+        elif isinstance(transform, LowPassFilter):
+            values = transform.transform_parameters['cutoff_freq'].unsqueeze(0)
+        elif isinstance(transform, Delay):
+            values = transform.shift.transform_parameters['num_samples_to_shift'] / self.sr
+        elif isinstance(transform, PitchShift):
+            values = transform.transform_parameters['transpositions']
+            values = torch.tensor([float(v) for v in values]).unsqueeze(0)
+        elif isinstance(transform, Shift):
+            values = transform.transform_parameters['num_samples_to_shift'] / self.sr
+        elif isinstance(transform, SpliceOut):
+            values = transform.transform_parameters['splice_lengths']
+        else:
+            # values doesn't matter
+            values = None
+
+        return values
 
     def _ensure_shape(self, x):
         if x.dim() == 1:
@@ -184,3 +303,11 @@ class RandAugment:
             raise ValueError(f'Invalid shape for RandAugment signal: {x.shape}')
 
         return x
+    
+    @property
+    def n_params(self):
+        return (
+            len(self.transforms) - 
+            len(self.mutual_exclusions) + 
+            sum(v for v in self.transform_to_n_params.values())
+        )
